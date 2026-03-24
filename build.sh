@@ -24,14 +24,14 @@ case "${UNAMEOUT}" in
         ;;
 esac
 SHELL_FOLDER=$(cd "$(dirname "$0")";pwd)
-if [ -z $TOOLCHAIN_ROOT_PATH ]; then
-TOOLCHAIN_ROOT_PATH=/opt
-fi
-GLIB_ELF_CROSS_COMPILE_DIR=$TOOLCHAIN_ROOT_PATH/gcc-riscv64-unknown-linux-gnu
-GLIB_ELF_CROSS_PREFIX=$GLIB_ELF_CROSS_COMPILE_DIR/bin/riscv64-unknown-linux-gnu
-GLIB_ELF_CROSS_PREFIX_SYSROOT_DIR=$GLIB_ELF_CROSS_COMPILE_DIR/sysroot
-NEWLIB_ELF_CROSS_COMPILE_DIR=$TOOLCHAIN_ROOT_PATH/gcc-riscv64-unknown-elf
-NEWLIB_ELF_CROSS_PREFIX=$NEWLIB_ELF_CROSS_COMPILE_DIR/bin/riscv64-unknown-elf
+
+# Allow callers to override toolchain paths/prefixes via environment variables.
+: "${TOOLCHAIN_ROOT_PATH:=/opt}"
+: "${GLIB_ELF_CROSS_COMPILE_DIR:=$TOOLCHAIN_ROOT_PATH/gcc-riscv64-unknown-linux-gnu}"
+: "${GLIB_ELF_CROSS_PREFIX:=$GLIB_ELF_CROSS_COMPILE_DIR/bin/riscv64-unknown-linux-gnu}"
+: "${GLIB_ELF_CROSS_PREFIX_SYSROOT_DIR:=$GLIB_ELF_CROSS_COMPILE_DIR/sysroot}"
+: "${NEWLIB_ELF_CROSS_COMPILE_DIR:=$TOOLCHAIN_ROOT_PATH/gcc-riscv64-unknown-elf}"
+: "${NEWLIB_ELF_CROSS_PREFIX:=$NEWLIB_ELF_CROSS_COMPILE_DIR/bin/riscv64-unknown-elf}"
 
 BUILD_TARGET=$1
 BUILD_ROOTFS_OPT=$2
@@ -271,6 +271,26 @@ build_kernel()
     fi  
     cd $SHELL_FOLDER/linux-6.1.11
     make ARCH=riscv CROSS_COMPILE=$GLIB_ELF_CROSS_PREFIX- quard_star_defconfig
+    # GCC 14+ may break old kernel GCC plugins (e.g. randstruct plugin API mismatch).
+    # Disable GCC plugins to keep cross-version toolchains buildable.
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable GCC_PLUGINS
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable GCC_PLUGIN_RANDSTRUCT || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable RANDSTRUCT || true
+    # New compilers introduce warnings that old kernel trees do not handle cleanly.
+    # Keep warnings, but don't fail the whole build due to -Werror.
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable WERROR || true
+    # Avoid early boot panics in ftrace init with newer compiler/kernel combinations.
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable TRACING || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable FTRACE || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable FUNCTION_TRACER || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable DYNAMIC_FTRACE || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable DYNAMIC_FTRACE_WITH_REGS || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable FTRACE_SYSCALLS || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable KPROBES || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable KPROBES_ON_FTRACE || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable UPROBES || true
+    $SHELL_FOLDER/linux-6.1.11/scripts/config --file .config --disable UPROBE_EVENTS || true
+    make ARCH=riscv CROSS_COMPILE=$GLIB_ELF_CROSS_PREFIX- olddefconfig
     make ARCH=riscv CROSS_COMPILE=$GLIB_ELF_CROSS_PREFIX- -j$PROCESSORS
     #make ARCH=riscv CROSS_COMPILE=$GLIB_ELF_CROSS_PREFIX- tools/perf -j$PROCESSORS
     cp $SHELL_FOLDER/linux-6.1.11/arch/riscv/boot/Image $SHELL_FOLDER/output/linux_kernel/Image
