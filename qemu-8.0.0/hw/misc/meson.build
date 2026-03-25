@@ -33,6 +33,7 @@ softmmu_ss.add(when: 'CONFIG_SIFIVE_E_PRCI', if_true: files('sifive_e_prci.c'))
 softmmu_ss.add(when: 'CONFIG_SIFIVE_U_OTP', if_true: files('sifive_u_otp.c'))
 softmmu_ss.add(when: 'CONFIG_SIFIVE_U_PRCI', if_true: files('sifive_u_prci.c'))
 softmmu_ss.add(when: 'CONFIG_QUARD_STAR_SYSCON', if_true: files('quard_star_syscon.c'))
+softmmu_ss.add(when: 'CONFIG_QUARD_STAR_DEMOCHAR', if_true: files('quard_star_demochar.c'))
 
 subdir('macio')
 

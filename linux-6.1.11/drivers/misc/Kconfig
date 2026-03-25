@@ -57,6 +57,12 @@ config DUMMY_IRQ
 	  The sole purpose of this module is to help with debugging of systems on
 	  which spurious IRQs would happen on disabled IRQ vector.
 
+config QUARD_STAR_DEMOCHAR
+	tristate "Quard Star demo char device"
+	depends on OF && HAS_IOMEM
+	help
+	  Minimal misc-based character driver for the Quard Star demo MMIO device.
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT

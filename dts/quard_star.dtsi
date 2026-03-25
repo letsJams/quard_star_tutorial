@@ -457,6 +457,12 @@
 			status = "disabled";
 		};
 
+		demochar: demochar@10015000 {
+			compatible = "quard,quard-star-demochar";
+			reg = <0x0 0x10015000 0x0 0x1000>;
+			status = "disabled";
+		};
+
 		pwm: pwm@1000d000 {
 			compatible = "sifive,pwm0";
 			reg = <0x0 0x1000d000 0x0 0x1000>;

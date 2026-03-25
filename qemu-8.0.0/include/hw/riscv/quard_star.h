@@ -40,6 +40,7 @@
 #include "hw/timer/sifive_pwm.h"
 #include "hw/adc/zynq-xadc.h"
 #include "hw/net/cadence_gem.h"
+#include "hw/misc/quard_star_demochar.h"
 
 #define QUARD_STAR_MANAGEMENT_CPU_COUNT    1
 #define QUARD_STAR_COMPUTE_CPU_COUNT       7
@@ -105,6 +106,7 @@ enum {
     QUARD_STAR_NAND,
     QUARD_STAR_CAN,
     QUARD_STAR_WDT,
+    QUARD_STAR_DEMOCHAR,
     QUARD_STAR_PWM,
     QUARD_STAR_ADC,
     QUARD_STAR_TIMER,

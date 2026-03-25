@@ -221,6 +221,10 @@
 	status = "okay";
 };
 
+&demochar {
+	status = "okay";
+};
+
 &pwm {
 	status = "okay";
 };
