@@ -274,7 +274,8 @@ static void quard_star_doorbell_board_create(MachineState *machine)
     QuardStarState *s = RISCV_VIRT_MACHINE(machine);
 
     quard_star_doorbell_create(quard_star_memmap[QUARD_STAR_DOORBELL].base,
-        qdev_get_gpio_in(DEVICE(s->plic), QUARD_STAR_DOORBELL_IRQ));
+        qdev_get_gpio_in(DEVICE(s->plic), QUARD_STAR_DOORBELL_L2R_IRQ),
+        qdev_get_gpio_in(DEVICE(s->plic), QUARD_STAR_DOORBELL_R2L_IRQ));
 }
 
 static void quard_star_rtc_create(MachineState *machine)

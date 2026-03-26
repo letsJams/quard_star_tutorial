@@ -13,20 +13,13 @@ static void ipc_task(void *p_arg)
 {
     char rx[QUARD_STAR_IPC_MAX_MSG + 1];
     char tx[QUARD_STAR_IPC_MAX_MSG + 1];
-    BaseType_t selftest_done = pdFALSE;
     int len;
     int ret;
 
     quard_star_ipc_init();
     debug_log("ipc_task ready, shared memory @ 0x%lx\n",
               (unsigned long)QUARD_STAR_IPC_SHM_BASE);
-    debug_log("doorbell wait enabled on irq %u\n", QUARD_STAR_DOORBELL_IRQ);
-
-    if (selftest_done == pdFALSE) {
-        selftest_done = pdTRUE;
-        debug_log("doorbell selftest trigger\n");
-        quard_star_doorbell_ring_l2r();
-    }
+    debug_log("doorbell wait enabled on irq %u\n", QUARD_STAR_DOORBELL_L2R_IRQ);
 
     for (;;) {
         len = quard_star_ipc_recv(rx, QUARD_STAR_IPC_MAX_MSG);
@@ -60,8 +53,12 @@ static void ipc_task(void *p_arg)
                 vTaskDelay(pdMS_TO_TICKS(10));
         } while (ret == QUARD_STAR_IPC_ERR_NOSPC);
 
-        if (ret < 0)
+        if (ret < 0) {
             debug_log("ipc send error %d\n", ret);
+            continue;
+        }
+
+        quard_star_doorbell_ring_r2l();
     }
 }
 

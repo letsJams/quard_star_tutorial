@@ -467,7 +467,8 @@
 				compatible = "quard,quard-star-doorbell";
 				reg = <0x0 0x10016000 0x0 0x1000>;
 				interrupt-parent = <&plic>;
-				interrupts = <60>;
+				interrupts = <60>, <61>;
+				interrupt-names = "l2r", "r2l";
 				status = "disabled";
 			};
 

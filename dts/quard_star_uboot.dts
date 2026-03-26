@@ -37,6 +37,9 @@
 	quard_star_ipc {
 		compatible = "quard,quard-star-ipc";
 		memory-region = <&ipc_shm>;
+		doorbell = <&doorbell>;
+		interrupt-parent = <&plic>;
+		interrupts = <61>;
 		status = "okay";
 	};
 
@@ -232,6 +235,10 @@
 };
 
 &demochar {
+	status = "okay";
+};
+
+&doorbell {
 	status = "okay";
 };
 

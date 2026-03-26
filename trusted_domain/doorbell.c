@@ -8,7 +8,9 @@
 enum {
     QUARD_STAR_DOORBELL_L2R_SET = 0x0,
     QUARD_STAR_DOORBELL_L2R_CLR = 0x4,
-    QUARD_STAR_DOORBELL_STATUS  = 0x8,
+    QUARD_STAR_DOORBELL_R2L_SET = 0x8,
+    QUARD_STAR_DOORBELL_R2L_CLR = 0xc,
+    QUARD_STAR_DOORBELL_STATUS  = 0x10,
     QUARD_STAR_DOORBELL_L2R_PENDING = 0x1,
 };
 
@@ -39,6 +41,11 @@ void quard_star_doorbell_ring_l2r(void)
     quard_star_writel(1U, quard_star_doorbell_reg(QUARD_STAR_DOORBELL_L2R_SET));
 }
 
+void quard_star_doorbell_ring_r2l(void)
+{
+    quard_star_writel(1U, quard_star_doorbell_reg(QUARD_STAR_DOORBELL_R2L_SET));
+}
+
 static inline uint32_t quard_star_doorbell_status(void)
 {
     return quard_star_readl(quard_star_doorbell_reg(QUARD_STAR_DOORBELL_STATUS));
@@ -63,8 +70,8 @@ void quard_star_doorbell_register_task(TaskHandle_t task)
 
 void quard_star_doorbell_init(void)
 {
-    uint32_t word = QUARD_STAR_DOORBELL_IRQ / 32U;
-    uint32_t bit = 1U << (QUARD_STAR_DOORBELL_IRQ % 32U);
+    uint32_t word = QUARD_STAR_DOORBELL_L2R_IRQ / 32U;
+    uint32_t bit = 1U << (QUARD_STAR_DOORBELL_L2R_IRQ % 32U);
     uintptr_t enable_addr =
         QUARD_STAR_PLIC_ENABLE_WORD(QUARD_STAR_PLIC_CONTEXT_ID_S, word);
     uint32_t enable_val;
@@ -75,7 +82,8 @@ void quard_star_doorbell_init(void)
     debug_log("doorbell_init: after clear source\n");
 
     debug_log("doorbell_init: before set priority\n");
-    quard_star_writel(1U, QUARD_STAR_PLIC_SOURCE_PRIO(QUARD_STAR_DOORBELL_IRQ));
+    quard_star_writel(1U,
+        QUARD_STAR_PLIC_SOURCE_PRIO(QUARD_STAR_DOORBELL_L2R_IRQ));
     debug_log("doorbell_init: after set priority\n");
 
     debug_log("doorbell_init: before set threshold\n");
@@ -100,7 +108,7 @@ int quard_star_doorbell_handle_irq(void)
     if (!irq)
         return 0;
 
-    if (irq != QUARD_STAR_DOORBELL_IRQ) {
+    if (irq != QUARD_STAR_DOORBELL_L2R_IRQ) {
         debug_log("unexpected external irq %u\n", irq);
         quard_star_plic_complete(irq);
         return 0;

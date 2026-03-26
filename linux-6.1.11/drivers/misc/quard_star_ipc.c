@@ -10,6 +10,7 @@
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/interrupt.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
@@ -17,16 +18,57 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
+#include <linux/wait.h>
 
 #include <quard_star_ipc.h>
 
 struct quard_star_ipc {
     struct miscdevice miscdev;
     struct mutex lock;
+    wait_queue_head_t readq;
     struct quard_star_ipc_shared *shared;
+    void __iomem *doorbell;
+    int irq;
     phys_addr_t phys;
     size_t size;
 };
+
+enum {
+    QUARD_STAR_DOORBELL_L2R_SET = 0x0,
+    QUARD_STAR_DOORBELL_R2L_CLR = 0xc,
+};
+
+static bool quard_star_ipc_r2l_ready(struct quard_star_ipc *ipc)
+{
+    return __smp_load_acquire(&ipc->shared->rtos_to_linux.prod) !=
+           READ_ONCE(ipc->shared->rtos_to_linux.cons);
+}
+
+static void quard_star_ipc_ring_doorbell_l2r(struct quard_star_ipc *ipc)
+{
+    if (!ipc->doorbell)
+        return;
+
+    writel(1U, ipc->doorbell + QUARD_STAR_DOORBELL_L2R_SET);
+}
+
+static void quard_star_ipc_clear_doorbell_r2l(struct quard_star_ipc *ipc)
+{
+    if (!ipc->doorbell)
+        return;
+
+    writel(1U, ipc->doorbell + QUARD_STAR_DOORBELL_R2L_CLR);
+}
+
+static irqreturn_t quard_star_ipc_irq(int irq, void *data)
+{
+    struct quard_star_ipc *ipc = data;
+
+    quard_star_ipc_clear_doorbell_r2l(ipc);
+    wake_up_interruptible(&ipc->readq);
+
+    return IRQ_HANDLED;
+}
 
 static void quard_star_ipc_ring_copy_in(struct quard_star_ipc_ring *ring,
                                         unsigned int pos,
@@ -182,12 +224,26 @@ static ssize_t quard_star_ipc_read(struct file *file, char __user *buf,
     if (!len)
         return 0;
 
-    mutex_lock(&ipc->lock);
-    ret = quard_star_ipc_pop(&ipc->shared->rtos_to_linux,
-                             &ipc->shared->notify_pending_r2l,
-                             payload, len > QUARD_STAR_IPC_MAX_MSG ?
-                             QUARD_STAR_IPC_MAX_MSG : len);
-    mutex_unlock(&ipc->lock);
+    for (;;) {
+        mutex_lock(&ipc->lock);
+        ret = quard_star_ipc_pop(&ipc->shared->rtos_to_linux,
+                                 &ipc->shared->notify_pending_r2l,
+                                 payload, len > QUARD_STAR_IPC_MAX_MSG ?
+                                 QUARD_STAR_IPC_MAX_MSG : len);
+        mutex_unlock(&ipc->lock);
+
+        if (ret != -EAGAIN)
+            break;
+
+        if (file->f_flags & O_NONBLOCK)
+            return -EAGAIN;
+
+        ret = wait_event_interruptible(ipc->readq,
+                                       quard_star_ipc_r2l_ready(ipc));
+        if (ret)
+            return ret;
+    }
+
     if (ret < 0)
         return ret;
 
@@ -219,6 +275,8 @@ static ssize_t quard_star_ipc_write(struct file *file, const char __user *buf,
     ret = quard_star_ipc_push(&ipc->shared->linux_to_rtos,
                               &ipc->shared->notify_pending_l2r,
                               payload, len);
+    if (ret >= 0)
+        quard_star_ipc_ring_doorbell_l2r(ipc);
     mutex_unlock(&ipc->lock);
     if (ret < 0)
         return ret;
@@ -235,6 +293,7 @@ static __poll_t quard_star_ipc_poll(struct file *file, poll_table *wait)
     unsigned int prod;
     unsigned int cons;
 
+    poll_wait(file, &ipc->readq, wait);
     mutex_lock(&ipc->lock);
 
     prod = __smp_load_acquire(&ipc->shared->rtos_to_linux.prod);
@@ -262,6 +321,8 @@ static const struct file_operations quard_star_ipc_fops = {
 static int quard_star_ipc_probe(struct platform_device *pdev)
 {
     struct quard_star_ipc *ipc;
+    struct device_node *doorbell;
+    struct resource doorbell_res;
     struct device_node *memory;
     struct resource res;
     void *base;
@@ -290,7 +351,22 @@ static int quard_star_ipc_probe(struct platform_device *pdev)
     ipc->shared = base;
     ipc->phys = res.start;
     ipc->size = resource_size(&res);
+    ipc->irq = platform_get_irq_optional(pdev, 0);
+
+    doorbell = of_parse_phandle(pdev->dev.of_node, "doorbell", 0);
+    if (doorbell) {
+        ret = of_address_to_resource(doorbell, 0, &doorbell_res);
+        of_node_put(doorbell);
+        if (ret)
+            return ret;
+
+        ipc->doorbell = devm_ioremap(&pdev->dev, doorbell_res.start,
+                                     resource_size(&doorbell_res));
+        if (!ipc->doorbell)
+            return -ENOMEM;
+    }
     mutex_init(&ipc->lock);
+    init_waitqueue_head(&ipc->readq);
     quard_star_ipc_init_shared(ipc);
 
     ipc->miscdev.minor = MISC_DYNAMIC_MINOR;
@@ -302,6 +378,15 @@ static int quard_star_ipc_probe(struct platform_device *pdev)
     ret = misc_register(&ipc->miscdev);
     if (ret)
         return ret;
+
+    if (ipc->irq > 0) {
+        ret = devm_request_irq(&pdev->dev, ipc->irq, quard_star_ipc_irq,
+                               0, dev_name(&pdev->dev), ipc);
+        if (ret) {
+            misc_deregister(&ipc->miscdev);
+            return ret;
+        }
+    }
 
     platform_set_drvdata(pdev, ipc);
     dev_info(&pdev->dev, "shared IPC ready at %pa (/dev/%s)\n", &ipc->phys,

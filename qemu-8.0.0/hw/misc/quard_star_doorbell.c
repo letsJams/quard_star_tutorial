@@ -27,12 +27,17 @@
 enum {
     L2R_SET_REG = 0x0,
     L2R_CLR_REG = 0x4,
-    STATUS_REG  = 0x8,
+    R2L_SET_REG = 0x8,
+    R2L_CLR_REG = 0xc,
+    STATUS_REG  = 0x10,
 };
 
 static void quard_star_doorbell_update_irq(QuardStarDoorbellState *s)
 {
-    qemu_set_irq(s->irq, (s->status & QUARD_STAR_DOORBELL_L2R_PENDING) != 0);
+    qemu_set_irq(s->irq_l2r,
+                 (s->status & QUARD_STAR_DOORBELL_L2R_PENDING) != 0);
+    qemu_set_irq(s->irq_r2l,
+                 (s->status & QUARD_STAR_DOORBELL_R2L_PENDING) != 0);
 }
 
 static uint64_t quard_star_doorbell_read(void *opaque, hwaddr addr,
@@ -64,6 +69,14 @@ static void quard_star_doorbell_write(void *opaque, hwaddr addr,
         s->status &= ~QUARD_STAR_DOORBELL_L2R_PENDING;
         quard_star_doorbell_update_irq(s);
         return;
+    case R2L_SET_REG:
+        s->status |= QUARD_STAR_DOORBELL_R2L_PENDING;
+        quard_star_doorbell_update_irq(s);
+        return;
+    case R2L_CLR_REG:
+        s->status &= ~QUARD_STAR_DOORBELL_R2L_PENDING;
+        quard_star_doorbell_update_irq(s);
+        return;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                       "%s: write: addr=0x%x val=0x%016" PRIx64 "\n",
@@ -89,7 +102,8 @@ static void quard_star_doorbell_init(Object *obj)
     memory_region_init_io(&s->mmio, obj, &quard_star_doorbell_ops, s,
                           TYPE_QUARD_STAR_DOORBELL, 0x1000);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
-    sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq);
+    sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq_l2r);
+    sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq_r2l);
 }
 
 static void quard_star_doorbell_class_init(ObjectClass *klass, void *data)
@@ -114,13 +128,15 @@ static void quard_star_doorbell_register_types(void)
 
 type_init(quard_star_doorbell_register_types)
 
-DeviceState *quard_star_doorbell_create(hwaddr addr, qemu_irq irq)
+DeviceState *quard_star_doorbell_create(hwaddr addr, qemu_irq irq_l2r,
+                                        qemu_irq irq_r2l)
 {
     DeviceState *dev = qdev_new(TYPE_QUARD_STAR_DOORBELL);
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
-    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, irq);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, irq_l2r);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1, irq_r2l);
 
     return dev;
 }

@@ -24,6 +24,7 @@
 
 #define TYPE_QUARD_STAR_DOORBELL "quard-star-doorbell"
 #define QUARD_STAR_DOORBELL_L2R_PENDING 0x1u
+#define QUARD_STAR_DOORBELL_R2L_PENDING 0x2u
 
 typedef struct QuardStarDoorbellState QuardStarDoorbellState;
 DECLARE_INSTANCE_CHECKER(QuardStarDoorbellState, QUARD_STAR_DOORBELL_DEV,
@@ -32,10 +33,12 @@ DECLARE_INSTANCE_CHECKER(QuardStarDoorbellState, QUARD_STAR_DOORBELL_DEV,
 struct QuardStarDoorbellState {
     SysBusDevice parent_obj;
     MemoryRegion mmio;
-    qemu_irq irq;
+    qemu_irq irq_l2r;
+    qemu_irq irq_r2l;
     uint32_t status;
 };
 
-DeviceState *quard_star_doorbell_create(hwaddr addr, qemu_irq irq);
+DeviceState *quard_star_doorbell_create(hwaddr addr, qemu_irq irq_l2r,
+                                        qemu_irq irq_r2l);
 
 #endif
