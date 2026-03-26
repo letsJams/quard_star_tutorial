@@ -176,7 +176,7 @@ customize1)
 	DEFAULT_V=":vn:$COLS""x""$ROWS:"
 	;;
 customize2)
-	GRAPHIC_PARAM="--display $QEMU_DISPLAY --serial telnet:127.0.0.1:3441,server,nowait --serial telnet:127.0.0.1:3442,server,nowait --serial telnet:127.0.0.1:3443,server,nowait --monitor stdio --parallel none"
+	GRAPHIC_PARAM="--display $QEMU_DISPLAY --serial telnet:127.0.0.1:3441,server,nowait --serial telnet:127.0.0.1:3442,server,nowait --serial telnet:127.0.0.1:3443,server,wait --monitor stdio --parallel none"
 	DEFAULT_V=":vn:24x80:"
 	;;
 customize3)

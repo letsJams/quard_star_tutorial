@@ -36,38 +36,58 @@
                 order = <19>;
             };
 
-            tuart: tuart {
-                compatible = "opensbi,domain,memregion";
-                base = <0x0 0x10002000>;
-                order = <8>;
-                mmio;
-                devices = <&uart2>;
-            };
+	            tuart: tuart {
+	                compatible = "opensbi,domain,memregion";
+	                base = <0x0 0x10002000>;
+	                order = <8>;
+	                mmio;
+	                devices = <&uart2>;
+	            };
 
-		    allmem: allmem {
-		        compatible = "opensbi,domain,memregion";
-		        base = <0x0 0x0>;
-		        order = <64>;
+	            tplic: tplic {
+	                compatible = "opensbi,domain,memregion";
+	                base = <0x0 0x0C000000>;
+	                order = <22>;
+	                mmio;
+	                devices = <&plic>;
+	            };
+
+	            tdoorbell: tdoorbell {
+	                compatible = "opensbi,domain,memregion";
+	                base = <0x0 0x10016000>;
+	                order = <12>;
+	                mmio;
+	                devices = <&doorbell>;
+	            };
+
+			    allmem: allmem {
+			        compatible = "opensbi,domain,memregion";
+			        base = <0x0 0x0>;
+			        order = <64>;
 		    };
 
-            tdomain: trusted-domain {
-                compatible = "opensbi,domain,instance";
-                possible-harts = <&cpu7>;
-                regions = <&tmem0 0x7>, <&tmem1 0x7>, <&tmem2 0x7>, <&tmem3 0x7>, <&tuart 0x7>, <&allmem 0x7>;
-                boot-hart = <&cpu7>;
-                next-arg1 = <0x0 0x00000000>;
-		        next-addr = <0x0 0xBF800000>;
-		        next-mode = <0x1>;
-                system-reset-allowed;
+	            tdomain: trusted-domain {
+	                compatible = "opensbi,domain,instance";
+	                possible-harts = <&cpu7>;
+	                regions = <&tmem0 0x7>, <&tmem1 0x7>, <&tmem2 0x7>,
+	                          <&tmem3 0x7>, <&tuart 0x7>, <&tplic 0x3>,
+	                          <&tdoorbell 0x3>, <&allmem 0x7>;
+	                boot-hart = <&cpu7>;
+	                next-arg1 = <0x0 0x00000000>;
+			        next-addr = <0x0 0xBF800000>;
+			        next-mode = <0x1>;
+	                system-reset-allowed;
 			};
 
-		    udomain: untrusted-domain {
-		        compatible = "opensbi,domain,instance";
-		        possible-harts = <&cpu0 &cpu1 &cpu2 &cpu3 &cpu4 &cpu5 &cpu6>;
-		        regions = <&tmem0 0x0>, <&tmem1 0x0>, <&tmem2 0x0>, <&tmem3 0x0>, <&tuart 0x0>, <&allmem 0x7>;
-				boot-hart = <&cpu0>;
-		        next-arg1 = <0x0 0xB0000000>;
-		        next-addr = <0x0 0xB0200000>;
+			    udomain: untrusted-domain {
+			        compatible = "opensbi,domain,instance";
+			        possible-harts = <&cpu0 &cpu1 &cpu2 &cpu3 &cpu4 &cpu5 &cpu6>;
+			        regions = <&tmem0 0x0>, <&tmem1 0x0>, <&tmem2 0x0>,
+			                  <&tmem3 0x0>, <&tuart 0x0>, <&tplic 0x3>,
+			                  <&tdoorbell 0x3>, <&allmem 0x7>;
+					boot-hart = <&cpu0>;
+			        next-arg1 = <0x0 0xB0000000>;
+			        next-addr = <0x0 0xB0200000>;
 		        next-mode = <0x1>;
 		        system-reset-allowed;
 		    };

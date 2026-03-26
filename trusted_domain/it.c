@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "debug_log.h"
+#include "doorbell.h"
 #include "sbi.h"
 #include "riscv_asm.h"
 
@@ -143,5 +144,8 @@ void handle_trap(uint64_t scause,uint64_t sepc,uint64_t stval, struct stack_fram
 
 void handle_interrupt(void)
 {
-    while(1);
+    if (quard_star_doorbell_handle_irq())
+        return;
+
+    debug_log("Unhandled external interrupt\n");
 }

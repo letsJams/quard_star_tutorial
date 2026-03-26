@@ -457,15 +457,23 @@
 			status = "disabled";
 		};
 
-		demochar: demochar@10015000 {
-			compatible = "quard,quard-star-demochar";
-			reg = <0x0 0x10015000 0x0 0x1000>;
-			status = "disabled";
-		};
+			demochar: demochar@10015000 {
+				compatible = "quard,quard-star-demochar";
+				reg = <0x0 0x10015000 0x0 0x1000>;
+				status = "disabled";
+			};
 
-		pwm: pwm@1000d000 {
-			compatible = "sifive,pwm0";
-			reg = <0x0 0x1000d000 0x0 0x1000>;
+			doorbell: doorbell@10016000 {
+				compatible = "quard,quard-star-doorbell";
+				reg = <0x0 0x10016000 0x0 0x1000>;
+				interrupt-parent = <&plic>;
+				interrupts = <60>;
+				status = "disabled";
+			};
+
+			pwm: pwm@1000d000 {
+				compatible = "sifive,pwm0";
+				reg = <0x0 0x1000d000 0x0 0x1000>;
 			interrupt-parent = <&plic>;
 			interrupts = <32>, <33>, <34>, <35>;
 			clocks = <&pwm_clk>;

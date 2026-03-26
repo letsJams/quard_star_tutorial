@@ -100,6 +100,7 @@
 
 #define SIP_SSIP			MIP_SSIP
 #define SIP_STIP			MIP_STIP
+#define SIP_SEIP			MIP_SEIP
 
 #define PRV_U				_UL(0)
 #define PRV_S				_UL(1)
