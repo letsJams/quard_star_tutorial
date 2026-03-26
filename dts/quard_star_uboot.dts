@@ -28,6 +28,16 @@
 			alignment = <0x0 0x1000>;
 			linux,cma-default;
 		};
+
+		ipc_shm: ipc_shm@bf7f0000 {
+			reg = <0x0 0xbf7f0000 0x0 0x10000>;
+		};
+	};
+
+	quard_star_ipc {
+		compatible = "quard,quard-star-ipc";
+		memory-region = <&ipc_shm>;
+		status = "okay";
 	};
 
 	sound {

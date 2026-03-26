@@ -97,6 +97,7 @@ C_INCLUDES = \
 		-I $(TOP_DIR)/riscv \
 		-I $(TOP_DIR)/stubs \
 		-I $(TOP_DIR)/driver \
+		-I $(TOP_DIR)/../ipc_proto \
 		-I $(TOP_DIR)
 
 

@@ -1,47 +1,66 @@
 #include <FreeRTOS.h>
 #include <task.h>
+#include <stdio.h>
+#include <string.h>
 #include "debug_log.h"
-#include "sbi.h"
-#include "riscv_asm.h"
+#include "ipc.h"
 
-static void task1(void *p_arg)
-{ 
-    int time = 0;
-    for(;;)
-    {
-        debug_log("task1 0x%x\n",time++);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+static void ipc_task(void *p_arg)
+{
+    char rx[QUARD_STAR_IPC_MAX_MSG + 1];
+    char tx[QUARD_STAR_IPC_MAX_MSG + 1];
+    int len;
+    int ret;
+
+    quard_star_ipc_init();
+    debug_log("ipc_task ready, shared memory @ 0x%lx\n",
+              (unsigned long)QUARD_STAR_IPC_SHM_BASE);
+
+    for (;;) {
+        len = quard_star_ipc_recv(rx, QUARD_STAR_IPC_MAX_MSG);
+        if (len == QUARD_STAR_IPC_ERR_EMPTY) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        if (len < 0) {
+            debug_log("ipc recv error %d\n", len);
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        rx[len] = '\0';
+        debug_log("ipc rx: %s\n", rx);
+
+        if (!strncmp(rx, "ping-", 5))
+            len = snprintf(tx, sizeof(tx), "pong-%s", rx + 5);
+        else
+            len = snprintf(tx, sizeof(tx), "ack:%s", rx);
+
+        if (len < 0)
+            continue;
+        if (len > QUARD_STAR_IPC_MAX_MSG)
+            len = QUARD_STAR_IPC_MAX_MSG;
+
+        do {
+            ret = quard_star_ipc_send(tx, (size_t)len);
+            if (ret == QUARD_STAR_IPC_ERR_NOSPC)
+                vTaskDelay(pdMS_TO_TICKS(10));
+        } while (ret == QUARD_STAR_IPC_ERR_NOSPC);
+
+        if (ret < 0)
+            debug_log("ipc send error %d\n", ret);
     }
-}
-
-static void task2(void *p_arg)
-{ 
-    int time = 0;
-    for(;;)
-    {
-        debug_log("task2 0x%x\n",time++);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
-static void vTaskCreate(void *p_arg)
-{ 
-	debug_log("vTaskCreate\n");
-
-    xTaskCreate(task1,"task1",2048,NULL,4,NULL);
-    xTaskCreate(task2,"task2",2048,NULL,4,NULL);
-
-    vTaskDelete(NULL);
 }
 
 int main(void)
 {
-	debug_log("Hello FreeRTOS!\n");
-    
     debug_log_init();
-    
-    xTaskCreate(vTaskCreate,"task creat",256,NULL,4,NULL);
+    debug_log("Hello FreeRTOS IPC!\n");
 
-	vTaskStartScheduler();
-	return 0;
+    quard_star_ipc_init();
+    xTaskCreate(ipc_task, "ipc_task", 2048, NULL, 4, NULL);
+
+    vTaskStartScheduler();
+    return 0;
 }

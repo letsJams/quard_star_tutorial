@@ -63,6 +63,13 @@ config QUARD_STAR_DEMOCHAR
 	help
 	  Minimal misc-based character driver for the Quard Star demo MMIO device.
 
+config QUARD_STAR_IPC
+	tristate "Quard Star shared memory IPC"
+	depends on OF
+	help
+	  Shared-memory misc driver used to exchange framed messages with the
+	  cpu7 FreeRTOS trusted domain.
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT
