@@ -41,6 +41,7 @@
 #include "hw/adc/zynq-xadc.h"
 #include "hw/net/cadence_gem.h"
 #include "hw/misc/quard_star_demochar.h"
+#include "hw/misc/quard_star_doorbell.h"
 
 #define QUARD_STAR_MANAGEMENT_CPU_COUNT    1
 #define QUARD_STAR_COMPUTE_CPU_COUNT       7
@@ -107,6 +108,7 @@ enum {
     QUARD_STAR_CAN,
     QUARD_STAR_WDT,
     QUARD_STAR_DEMOCHAR,
+    QUARD_STAR_DOORBELL,
     QUARD_STAR_PWM,
     QUARD_STAR_ADC,
     QUARD_STAR_TIMER,
@@ -163,6 +165,7 @@ enum {
     QUARD_STAR_PWM_IRQ     = 32, /* 32-35 */
     QUARD_STAR_GPIO_IRQ    = 36, /* 36-51 */
     QUARD_STAR_DMA_IRQ     = 52, /* 52-59 */
+    QUARD_STAR_DOORBELL_IRQ = 60,
 };
 
 #define QUARD_STAR_PLIC_NUM_SOURCES    127

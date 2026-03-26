@@ -35,6 +35,7 @@
 #include "hw/intc/sifive_plic.h"
 #include "hw/misc/quard_star_syscon.h"
 #include "hw/misc/quard_star_demochar.h"
+#include "hw/misc/quard_star_doorbell.h"
 #include "hw/audio/wm8750.h"
 #include "chardev/char.h"
 #include "sysemu/device_tree.h"
@@ -71,6 +72,7 @@ static const MemMapEntry quard_star_memmap[] = {
     [QUARD_STAR_LCDC]        = { 0x10013000,    0x1000 },
     [QUARD_STAR_WDT]         = { 0x10014000,    0x1000 },
     [QUARD_STAR_DEMOCHAR]    = { 0x10015000,    0x1000 },
+    [QUARD_STAR_DOORBELL]    = { 0x10016000,    0x1000 },
     
     [QUARD_STAR_VIRTIO0]     = { 0x10100000,    0x1000 },
     [QUARD_STAR_VIRTIO1]     = { 0x10101000,    0x1000 },
@@ -265,6 +267,14 @@ static void quard_star_system_control_create(MachineState *machine)
 static void quard_star_demochar_board_create(MachineState *machine)
 {
     quard_star_demochar_create(quard_star_memmap[QUARD_STAR_DEMOCHAR].base);
+}
+
+static void quard_star_doorbell_board_create(MachineState *machine)
+{
+    QuardStarState *s = RISCV_VIRT_MACHINE(machine);
+
+    quard_star_doorbell_create(quard_star_memmap[QUARD_STAR_DOORBELL].base,
+        qdev_get_gpio_in(DEVICE(s->plic), QUARD_STAR_DOORBELL_IRQ));
 }
 
 static void quard_star_rtc_create(MachineState *machine)
@@ -647,6 +657,7 @@ static void quard_star_machine_init(MachineState *machine)
     quard_star_flash_create(machine);
     quard_star_system_control_create(machine);
     quard_star_demochar_board_create(machine);
+    quard_star_doorbell_board_create(machine);
     quard_star_rtc_create(machine);
     quard_star_serial_create(machine);
     quard_star_i2c_create(machine);

@@ -57,6 +57,7 @@ config QUARD_STAR
     bool
     select QUARD_STAR_SYSCON
     select QUARD_STAR_DEMOCHAR
+    select QUARD_STAR_DOORBELL
     select GOLDFISH_RTC
     select MSI_NONBROKEN
     select PFLASH_CFI01

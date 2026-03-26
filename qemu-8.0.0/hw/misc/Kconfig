@@ -186,4 +186,7 @@ config QUARD_STAR_SYSCON
 config QUARD_STAR_DEMOCHAR
     bool
 
+config QUARD_STAR_DOORBELL
+    bool
+
 source macio/Kconfig
