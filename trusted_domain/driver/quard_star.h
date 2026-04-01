@@ -13,6 +13,8 @@
 
 #define NS16550_ADDR		CONS(0x10002000, UL)
 #define PLIC_ADDR            CONS(0x0c000000, UL)
+#define GPIO_ADDR            CONS(0x10009000, UL)
+#define DEMOCHAR_ADDR        CONS(0x10015000, UL)
 #define DOORBELL_ADDR        CONS(0x10016000, UL)
 
 #define QUARD_STAR_DOORBELL_L2R_IRQ    60U

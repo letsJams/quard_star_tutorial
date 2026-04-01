@@ -5,7 +5,9 @@
  */
 
 #include <linux/fs.h>
+#include <linux/jiffies.h>
 #include <linux/io.h>
+#include <linux/atomic.h>
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
@@ -19,19 +21,24 @@
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
+#include <linux/quard_star_ipc_client.h>
 
 #include <quard_star_ipc.h>
 
 struct quard_star_ipc {
-    struct miscdevice miscdev;
-    struct mutex lock;
-    wait_queue_head_t readq;
-    struct quard_star_ipc_shared *shared;
-    void __iomem *doorbell;
-    int irq;
-    phys_addr_t phys;
-    size_t size;
+	struct miscdevice miscdev;
+	struct mutex lock;
+	struct mutex call_lock;
+	wait_queue_head_t readq;
+	struct quard_star_ipc_shared *shared;
+	void __iomem *doorbell;
+	int irq;
+	phys_addr_t phys;
+	size_t size;
 };
+
+static struct quard_star_ipc *quard_star_ipc_global;
+static atomic_t quard_star_ipc_seq = ATOMIC_INIT(1);
 
 enum {
     QUARD_STAR_DOORBELL_L2R_SET = 0x0,
@@ -67,7 +74,15 @@ static irqreturn_t quard_star_ipc_irq(int irq, void *data)
     quard_star_ipc_clear_doorbell_r2l(ipc);
     wake_up_interruptible(&ipc->readq);
 
-    return IRQ_HANDLED;
+	return IRQ_HANDLED;
+}
+
+static void quard_star_ipc_warn_bad_packet(struct quard_star_ipc *ipc,
+					   const char *reason)
+{
+	if (ipc->miscdev.this_device)
+		dev_warn_ratelimited(ipc->miscdev.this_device,
+				     "bad IPC response packet: %s\n", reason);
 }
 
 static void quard_star_ipc_ring_copy_in(struct quard_star_ipc_ring *ring,
@@ -284,6 +299,190 @@ static ssize_t quard_star_ipc_write(struct file *file, const char __user *buf,
     return ret;
 }
 
+int quard_star_ipc_call(const void *tx, size_t tx_len, void *rx, size_t *rx_len)
+{
+	return quard_star_ipc_call_timeout(tx, tx_len, rx, rx_len,
+					   QUARD_STAR_IPC_DEFAULT_TIMEOUT_MS);
+}
+EXPORT_SYMBOL_GPL(quard_star_ipc_call);
+
+int quard_star_ipc_call_timeout(const void *tx, size_t tx_len,
+				void *rx, size_t *rx_len,
+				unsigned int timeout_ms)
+{
+	struct quard_star_ipc *ipc = READ_ONCE(quard_star_ipc_global);
+	unsigned char payload[QUARD_STAR_IPC_MAX_MSG];
+	unsigned long remaining;
+	long wait_ret;
+	size_t cap;
+	int ret;
+
+	if (!ipc)
+		return -ENODEV;
+	if (!tx || !rx || !rx_len || !tx_len)
+		return -EINVAL;
+	if (tx_len > QUARD_STAR_IPC_MAX_MSG)
+		return -EMSGSIZE;
+
+	cap = *rx_len;
+	if (!cap || cap > QUARD_STAR_IPC_MAX_MSG)
+		cap = QUARD_STAR_IPC_MAX_MSG;
+
+	remaining = msecs_to_jiffies(timeout_ms ? timeout_ms :
+				     QUARD_STAR_IPC_DEFAULT_TIMEOUT_MS);
+	if (!remaining)
+		remaining = 1;
+
+	ret = mutex_lock_interruptible(&ipc->call_lock);
+	if (ret)
+		return ret;
+
+	mutex_lock(&ipc->lock);
+	ret = quard_star_ipc_push(&ipc->shared->linux_to_rtos,
+				  &ipc->shared->notify_pending_l2r,
+				  tx, tx_len);
+	if (ret >= 0)
+		quard_star_ipc_ring_doorbell_l2r(ipc);
+	mutex_unlock(&ipc->lock);
+	if (ret < 0)
+		goto out_unlock_call;
+
+	for (;;) {
+		mutex_lock(&ipc->lock);
+		ret = quard_star_ipc_pop(&ipc->shared->rtos_to_linux,
+					 &ipc->shared->notify_pending_r2l,
+					 payload, sizeof(payload));
+		mutex_unlock(&ipc->lock);
+
+		if (ret != -EAGAIN)
+			break;
+
+		wait_ret = wait_event_interruptible_timeout(ipc->readq,
+						quard_star_ipc_r2l_ready(ipc),
+						remaining);
+		if (wait_ret < 0) {
+			ret = (int)wait_ret;
+			goto out_unlock_call;
+		}
+		if (!wait_ret) {
+			ret = -ETIMEDOUT;
+			goto out_unlock_call;
+		}
+		remaining = (unsigned long)wait_ret;
+	}
+
+	if (ret < 0)
+		goto out_unlock_call;
+	if (ret > cap) {
+		ret = -EMSGSIZE;
+		goto out_unlock_call;
+	}
+
+	memcpy(rx, payload, ret);
+	*rx_len = ret;
+	ret = 0;
+
+out_unlock_call:
+	mutex_unlock(&ipc->call_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(quard_star_ipc_call_timeout);
+
+int quard_star_ipc_request(struct quard_star_ipc_request *req)
+{
+	struct quard_star_ipc_msg_hdr tx_hdr;
+	struct quard_star_ipc_msg_hdr rx_hdr;
+	unsigned char tx[QUARD_STAR_IPC_MAX_MSG];
+	unsigned char rx[QUARD_STAR_IPC_MAX_MSG];
+	struct quard_star_ipc *ipc = READ_ONCE(quard_star_ipc_global);
+	size_t tx_len;
+	size_t rx_len = sizeof(rx);
+	unsigned int rx_payload_len;
+	int ret;
+
+	if (!req)
+		return -EINVAL;
+	if (!ipc)
+		return -ENODEV;
+	if (!req->tx_payload && req->tx_len)
+		return -EINVAL;
+	if (!req->rx_payload && req->rx_len)
+		return -EINVAL;
+
+	tx_len = sizeof(tx_hdr) + req->tx_len;
+	if (tx_len > sizeof(tx))
+		return -EMSGSIZE;
+
+	tx_hdr.magic = QUARD_STAR_IPC_MSG_MAGIC;
+	tx_hdr.version = QUARD_STAR_IPC_MSG_VERSION;
+	tx_hdr.type = QUARD_STAR_IPC_MSG_TYPE_REQ;
+	tx_hdr.service = req->service;
+	tx_hdr.opcode = req->opcode;
+	tx_hdr.seq = (unsigned int)atomic_inc_return(&quard_star_ipc_seq);
+	tx_hdr.status = QUARD_STAR_IPC_STATUS_OK;
+	tx_hdr.len = req->tx_len;
+
+	memcpy(tx, &tx_hdr, sizeof(tx_hdr));
+	if (req->tx_len)
+		memcpy(tx + sizeof(tx_hdr), req->tx_payload, req->tx_len);
+
+	ret = quard_star_ipc_call_timeout(tx, tx_len, rx, &rx_len,
+					  req->timeout_ms);
+	if (ret)
+		return ret;
+
+	if (rx_len < sizeof(rx_hdr)) {
+		quard_star_ipc_warn_bad_packet(ipc, "short header");
+		return -EIO;
+	}
+
+	memcpy(&rx_hdr, rx, sizeof(rx_hdr));
+	if (rx_hdr.magic != QUARD_STAR_IPC_MSG_MAGIC) {
+		quard_star_ipc_warn_bad_packet(ipc, "bad magic");
+		return -EPROTO;
+	}
+	if (rx_hdr.version != QUARD_STAR_IPC_MSG_VERSION) {
+		quard_star_ipc_warn_bad_packet(ipc, "bad version");
+		return -EPROTO;
+	}
+	if (rx_hdr.type != QUARD_STAR_IPC_MSG_TYPE_RESP) {
+		quard_star_ipc_warn_bad_packet(ipc, "unexpected type");
+		return -EPROTO;
+	}
+	if (rx_hdr.service != tx_hdr.service) {
+		quard_star_ipc_warn_bad_packet(ipc, "unexpected service");
+		return -EPROTO;
+	}
+	if (rx_hdr.opcode != tx_hdr.opcode) {
+		quard_star_ipc_warn_bad_packet(ipc, "unexpected opcode");
+		return -EPROTO;
+	}
+	if (rx_hdr.seq != tx_hdr.seq) {
+		quard_star_ipc_warn_bad_packet(ipc, "seq mismatch");
+		return -EPROTO;
+	}
+	if (rx_len != sizeof(rx_hdr) + rx_hdr.len) {
+		quard_star_ipc_warn_bad_packet(ipc, "length mismatch");
+		return -EPROTO;
+	}
+
+	rx_payload_len = rx_hdr.len;
+	if (rx_hdr.status != QUARD_STAR_IPC_STATUS_OK)
+		return rx_hdr.status;
+	if (rx_payload_len > req->rx_len)
+		return -EMSGSIZE;
+	if (!req->rx_len_out && rx_payload_len != req->rx_len)
+		return -EPROTO;
+
+	if (rx_payload_len)
+		memcpy(req->rx_payload, rx + sizeof(rx_hdr), rx_payload_len);
+	if (req->rx_len_out)
+		*req->rx_len_out = rx_payload_len;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(quard_star_ipc_request);
+
 static __poll_t quard_star_ipc_poll(struct file *file, poll_table *wait)
 {
     struct miscdevice *miscdev = file->private_data;
@@ -366,6 +565,7 @@ static int quard_star_ipc_probe(struct platform_device *pdev)
             return -ENOMEM;
     }
     mutex_init(&ipc->lock);
+    mutex_init(&ipc->call_lock);
     init_waitqueue_head(&ipc->readq);
     quard_star_ipc_init_shared(ipc);
 
@@ -389,6 +589,7 @@ static int quard_star_ipc_probe(struct platform_device *pdev)
     }
 
     platform_set_drvdata(pdev, ipc);
+    WRITE_ONCE(quard_star_ipc_global, ipc);
     dev_info(&pdev->dev, "shared IPC ready at %pa (/dev/%s)\n", &ipc->phys,
              ipc->miscdev.name);
     return 0;
@@ -398,6 +599,8 @@ static int quard_star_ipc_remove(struct platform_device *pdev)
 {
     struct quard_star_ipc *ipc = platform_get_drvdata(pdev);
 
+    if (READ_ONCE(quard_star_ipc_global) == ipc)
+        WRITE_ONCE(quard_star_ipc_global, NULL);
     misc_deregister(&ipc->miscdev);
     return 0;
 }
