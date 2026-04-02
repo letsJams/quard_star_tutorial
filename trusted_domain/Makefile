@@ -57,6 +57,7 @@ C_SOURCES =  \
 		${wildcard $(TOP_DIR)/FreeRTOS-Kernel/*.c} \
 		${wildcard $(TOP_DIR)/FreeRTOS-Kernel/portable/GCC/RISC-V/*.c} \
 		${wildcard $(TOP_DIR)/FreeRTOS-Kernel/portable/MemMang/heap_4.c} \
+		${wildcard $(TOP_DIR)/openamp/*.c} \
 		${wildcard $(TOP_DIR)/driver/*.c} \
 		${wildcard $(TOP_DIR)/stubs/*.c} \
 		${wildcard $(TOP_DIR)/riscv/*.c} \
@@ -83,7 +84,7 @@ MCU = -march=rv64imafdc -mabi=lp64d -mcmodel=medany -msmall-data-limit=8 -fmessa
 AS_DEFS = 
 
 # C defines
-C_DEFS = 
+C_DEFS = -DMETAL_INTERNAL -DVIRTIO_DEVICE_SUPPORT=1 -DVIRTIO_DRIVER_SUPPORT=1 -DVQ_RX_EMPTY_NOTIFY=0
 
 # AS includes
 AS_INCLUDES = \
@@ -98,6 +99,8 @@ C_INCLUDES = \
 		-I $(TOP_DIR)/stubs \
 		-I $(TOP_DIR)/driver \
 		-I $(TOP_DIR)/../ipc_proto \
+		-I $(TOP_DIR)/../third_party/libmetal/include \
+		-I $(TOP_DIR)/../third_party/open-amp/lib/include \
 		-I $(TOP_DIR)
 
 

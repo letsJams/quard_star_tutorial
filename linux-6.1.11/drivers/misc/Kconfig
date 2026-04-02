@@ -84,6 +84,13 @@ config QUARD_STAR_LED_IPC
 	  Exposes /dev/quard_star_led_ipc and forwards LED on/off control to the
 	  cpu7 FreeRTOS trusted domain over the Quard Star IPC transport.
 
+config QUARD_STAR_LED_RPMSG
+	tristate "Quard Star LED proxy over RPMSG"
+	depends on RPMSG
+	help
+	  Exposes /dev/quard_star_led_rpmsg and forwards LED control to the
+	  cpu7 FreeRTOS trusted domain over the Quard Star RPMSG transport.
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT

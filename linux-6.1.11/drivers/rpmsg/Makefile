@@ -10,3 +10,5 @@ obj-$(CONFIG_RPMSG_QCOM_GLINK_RPM) += qcom_glink_rpm.o
 obj-$(CONFIG_RPMSG_QCOM_GLINK_SMEM) += qcom_glink_smem.o
 obj-$(CONFIG_RPMSG_QCOM_SMD)	+= qcom_smd.o
 obj-$(CONFIG_RPMSG_VIRTIO)	+= virtio_rpmsg_bus.o
+obj-$(CONFIG_QUARD_STAR_RPMSG_VIRTIO) += quard_star_rpmsg_virtio.o
+CFLAGS_quard_star_rpmsg_virtio.o += -I$(srctree)/../ipc_proto

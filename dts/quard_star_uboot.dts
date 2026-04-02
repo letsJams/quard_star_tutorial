@@ -13,7 +13,7 @@
 
 	memory@80000000 {
 		device_type = "memory";
-		reg = <0x0 0x80000000 0x0 0x3f800000>;
+		reg = <0x0 0x80000000 0x0 0x3f7e0000>;
 	};
 
 	reserved-memory {
@@ -23,8 +23,8 @@
 
 		linux,cma@b0000000 {
 			compatible = "shared-dma-pool";
-			size = <0x0 0xf800000>;
-			reg = <0x0 0xb0000000 0x0 0xf800000>;
+			size = <0x0 0xf7e0000>;
+			reg = <0x0 0xb0000000 0x0 0xf7e0000>;
 			alignment = <0x0 0x1000>;
 			linux,cma-default;
 		};
@@ -32,11 +32,30 @@
 		ipc_shm: ipc_shm@bf7f0000 {
 			reg = <0x0 0xbf7f0000 0x0 0x10000>;
 		};
+
+		rpmsg_shm: rpmsg_shm@bf7e0000 {
+			reg = <0x0 0xbf7e0000 0x0 0x05000>;
+		};
+
+		rpmsg_buf_shm: rpmsg_buf_shm@bf7e5000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xbf7e5000 0x0 0x0b000>;
+			no-map;
+		};
 	};
 
 	quard_star_ipc {
 		compatible = "quard,quard-star-ipc";
 		memory-region = <&ipc_shm>;
+		doorbell = <&doorbell>;
+		interrupt-parent = <&plic>;
+		interrupts = <61>;
+		status = "okay";
+	};
+
+	quard_star_rpmsg {
+		compatible = "quard,quard-star-rpmsg-virtio";
+		memory-region = <&rpmsg_shm>, <&rpmsg_buf_shm>;
 		doorbell = <&doorbell>;
 		interrupt-parent = <&plic>;
 		interrupts = <61>;

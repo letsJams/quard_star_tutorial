@@ -6,9 +6,11 @@
 #include "debug_log.h"
 #include "doorbell.h"
 #include "ipc.h"
+#include "quard_star_openamp.h"
 #include "quard_star.h"
 
 static TaskHandle_t ipc_task_handle;
+static TaskHandle_t openamp_task_handle;
 
 enum {
     QUARD_STAR_GPIO_OUTPUT_EN_REG = 0x8,
@@ -312,6 +314,14 @@ int main(void)
               (unsigned long)ipc_task_handle);
     quard_star_doorbell_register_task(ipc_task_handle);
     debug_log("main: after register task\n");
+
+    ret = quard_star_openamp_start(&openamp_task_handle);
+    if (ret != pdPASS) {
+        debug_log("xTaskCreate openamp_task failed: %d\n", ret);
+        return 1;
+    }
+    debug_log("main: openamp task handle=0x%lx\n",
+              (unsigned long)openamp_task_handle);
 
     debug_log("main: before scheduler\n");
     vTaskStartScheduler();

@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include "ipc.h"
 #include "riscv_barrier.h"
@@ -47,6 +48,7 @@ static void quard_star_ipc_init_ring(struct quard_star_ipc_ring *ring)
 void quard_star_ipc_init(void)
 {
     struct quard_star_ipc_shared *shared = quard_star_ipc_shared_area;
+    void *shared_base = (void *)(uintptr_t)shared;
 
     if (shared->magic == QUARD_STAR_IPC_MAGIC &&
         shared->version == QUARD_STAR_IPC_VERSION &&
@@ -54,7 +56,7 @@ void quard_star_ipc_init(void)
         shared->rtos_to_linux.size == QUARD_STAR_IPC_RING_SIZE)
         return;
 
-    memset(shared, 0, sizeof(*shared));
+    memset(shared_base, 0, sizeof(*shared));
     quard_star_ipc_init_ring(&shared->linux_to_rtos);
     quard_star_ipc_init_ring(&shared->rtos_to_linux);
     smp_wmb();

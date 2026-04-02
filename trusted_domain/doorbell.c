@@ -12,9 +12,10 @@ enum {
     QUARD_STAR_DOORBELL_R2L_CLR = 0xc,
     QUARD_STAR_DOORBELL_STATUS  = 0x10,
     QUARD_STAR_DOORBELL_L2R_PENDING = 0x1,
+    QUARD_STAR_DOORBELL_MAX_TASKS = 4,
 };
 
-static TaskHandle_t quard_star_doorbell_task;
+static TaskHandle_t quard_star_doorbell_tasks[QUARD_STAR_DOORBELL_MAX_TASKS];
 
 static inline void quard_star_writel(uint32_t value, uintptr_t addr)
 {
@@ -65,7 +66,21 @@ static void quard_star_plic_complete(uint32_t irq)
 
 void quard_star_doorbell_register_task(TaskHandle_t task)
 {
-    quard_star_doorbell_task = task;
+    unsigned int i;
+
+    if (!task)
+        return;
+
+    for (i = 0; i < QUARD_STAR_DOORBELL_MAX_TASKS; i++) {
+        if (quard_star_doorbell_tasks[i] == task)
+            return;
+        if (!quard_star_doorbell_tasks[i]) {
+            quard_star_doorbell_tasks[i] = task;
+            return;
+        }
+    }
+
+    debug_log("doorbell task list full\n");
 }
 
 void quard_star_doorbell_init(void)
@@ -123,10 +138,12 @@ int quard_star_doorbell_handle_irq(void)
 
     quard_star_plic_complete(irq);
 
-    if (quard_star_doorbell_task) {
-        vTaskNotifyGiveFromISR(quard_star_doorbell_task, &woken);
-        portYIELD_FROM_ISR(woken);
+    for (unsigned int i = 0; i < QUARD_STAR_DOORBELL_MAX_TASKS; i++) {
+        if (quard_star_doorbell_tasks[i])
+            vTaskNotifyGiveFromISR(quard_star_doorbell_tasks[i], &woken);
     }
+
+    portYIELD_FROM_ISR(woken);
 
     return 1;
 }

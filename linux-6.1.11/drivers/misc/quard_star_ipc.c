@@ -581,7 +581,7 @@ static int quard_star_ipc_probe(struct platform_device *pdev)
 
     if (ipc->irq > 0) {
         ret = devm_request_irq(&pdev->dev, ipc->irq, quard_star_ipc_irq,
-                               0, dev_name(&pdev->dev), ipc);
+                               IRQF_SHARED, dev_name(&pdev->dev), ipc);
         if (ret) {
             misc_deregister(&ipc->miscdev);
             return ret;
